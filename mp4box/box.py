@@ -8,19 +8,6 @@ DEFAULT_INDENTATION = 4
 
 class Box(object):
     """
-    aligned(8) class Box (unsigned int(32) boxtype,
-            optional unsigned int(8)[16] extended_type) {
-        unsigned int(32) size;
-        unsigned int(32) type = boxtype;
-        if (size==1) {
-            unsigned int(64) largesize;
-        } else if (size==0) {
-            // box extends to end of file
-        }
-        if (boxtype==‘uuid’) {
-            unsigned int(8)[16] usertype = extended_type;
-        }
-    }
     """
     def __init__(self, f):
         self._bytecount = 0
@@ -47,11 +34,6 @@ class Box(object):
 
 class FullBox(Box):
     """
-    aligned(8) class FullBox(unsigned int(32) boxtype, unsigned int(8) v, bit(24) f)
-        extends Box(boxtype) {
-        unsigned int(8) version = v;
-        bit(24) flags = f;
-    }
     """
     def __init__(self, f):
         super(FullBox, self).__init__(f)
@@ -77,13 +59,6 @@ class ContainerBox(Box):
 
 class Co64(FullBox):
     """
-    aligned(8) class ChunkLargeOffsetBox
-        extends FullBox(‘co64’, version = 0, 0) {
-        unsigned int(32) entry_count;
-        for (i=1; i <= entry_count; i++) {
-            unsigned int(64) chunk_offset;
-        }
-    }
     """
     def __init__(self, f):
         super(Co64, self).__init__(f)
@@ -99,6 +74,38 @@ class Co64(FullBox):
             idx += 1
 
 
+class Edts(ContainerBox):
+    def __init__(self, f):
+        super(Edts, self).__init__(f)
+
+
+class Elst(FullBox):
+    """
+    """
+    def __init__(self, f):
+        super(Elst, self).__init__(f)
+
+        self.entry_count = read_value(f, 32)
+        self._bytecount += 4
+
+        for idx in xrange(self.entry_count):
+            if self.version == 1:
+                self.segment_duration = read_value(f, 64)
+                self._bytecount += 8
+                self.media_time = read_value(f, 64, "signed")
+                self._bytecount += 8
+            else:
+                self.segment_duration = read_value(f, 32)
+                self._bytecount += 4
+                self.media_time = read_value(f, 32, "signed")
+                self._bytecount += 4
+
+            self.media_rate_integer = read_value(f, 16, "signed")
+            self._bytecount += 2
+            self.media_rate_fraction = read_value(f, 16, "signed")
+            self._bytecount += 2
+
+
 class Free(Box):
     def __init__(self, f):
         super(Free, self).__init__(f)
@@ -107,12 +114,6 @@ class Free(Box):
 
 class Ftyp(Box):
     """
-    aligned(8) class FileTypeBox
-        extends Box(‘ftyp’) {
-        unsigned int(32) major_brand;
-        unsigned int(32) minor_version;
-        unsigned int(32) compatible_brands[]; // to end of the box
-    }
     """
     def __init__(self, f):
         super(Ftyp, self).__init__(f)
@@ -131,12 +132,6 @@ class Ftyp(Box):
 
 class Hdlr(FullBox):
     """
-    aligned(8) class HandlerBox extends FullBox(‘hdlr’, version = 0, 0) {
-        unsigned int(32) pre_defined = 0;
-        unsigned int(32) handler_type;
-        const unsigned int(32)[3] reserved = 0;
-        string name;
-    }
     """
     def __init__(self, f):
         super(Hdlr, self).__init__(f)
@@ -160,6 +155,28 @@ class Hdlr(FullBox):
         self._bytecount = self.boxsize
 
 
+class Hmhd(FullBox):
+    """
+    """
+    def __init__(self, f):
+        super(Hmhd, self).__init__(f)
+
+        self.maxPDUsize = read_value(f, 16)
+        self._bytecount += 2
+
+        self.avgPDUsize = read_value(f, 16)
+        self._bytecount += 2
+
+        self.maxbitrate = read_value(f, 32)
+        self._bytecount += 4
+
+        self.avgbitrate = read_value(f, 32)
+        self._bytecount += 4
+
+        read_value(f, 32)
+        self._bytecount += 4
+
+
 class Mdia(ContainerBox):
     def __init__(self, f):
         super(Mdia, self).__init__(f)
@@ -177,28 +194,6 @@ class Moov(ContainerBox):
 
 class Mvhd(FullBox):
     """
-    aligned(8) class MovieHeaderBox extends FullBox(‘mvhd’, version, 0) {
-        if (version==1) {
-            unsigned int(64) creation_time;
-            unsigned int(64) modification_time;
-            unsigned int(32) timescale;
-            unsigned int(64) duration;
-        } else { // version==0
-            unsigned int(32) creation_time;
-            unsigned int(32) modification_time;
-            unsigned int(32) timescale;
-            unsigned int(32) duration;
-        }
-        template int(32) rate = 0x00010000; // typically 1.0
-        template int(16) volume = 0x0100; // typically, full volume
-        const bit(16) reserved = 0;
-        const unsigned int(32)[2] reserved = 0;
-        template int(32)[9] matrix =
-        { 0x00010000,0,0,0,0x00010000,0,0,0,0x40000000 };
-        // Unity matrix
-        bit(32)[6] pre_defined = 0;
-        unsigned int(32) next_track_ID;
-    }
     """
     def __init__(self, f):
         super(Mvhd, self).__init__(f)
@@ -252,6 +247,26 @@ class Mvhd(FullBox):
         self._bytecount += 4
 
 
+class Nmhd(FullBox):
+    """
+    """
+    def __init__(self, f):
+        super(Nmhd, self).__init__(f)
+
+
+class Smhd(FullBox):
+    """
+    """
+    def __init__(self, f):
+        super(Smhd, self).__init__(f)
+
+        self.balance = read_value(f, 16, "signed")
+        self._bytecount += 2
+
+        read_value(f, 16)
+        self._bytecount += 2
+
+
 class Stbl(ContainerBox):
     def __init__(self, f):
         super(Stbl, self).__init__(f)
@@ -259,13 +274,6 @@ class Stbl(ContainerBox):
 
 class Stco(FullBox):
     """
-    aligned(8) class ChunkOffsetBox
-        extends FullBox(‘stco’, version = 0, 0) {
-        unsigned int(32) entry_count;
-        for (i=1; i <= entry_count; i++) {
-            unsigned int(32) chunk_offset;
-        }
-    }
     """
     def __init__(self, f):
         super(Stco, self).__init__(f)
@@ -283,15 +291,6 @@ class Stco(FullBox):
 
 class Stsc(FullBox):
     """
-    aligned(8) class SampleToChunkBox
-        extends FullBox(‘stsc’, version = 0, 0) {
-        unsigned int(32) entry_count;
-        for (i=1; i <= entry_count; i++) {
-            unsigned int(32) first_chunk;
-            unsigned int(32) samples_per_chunk;
-            unsigned int(32) sample_description_index;
-        }
-    }
     """
     class stc:
         def __init__(self):
@@ -361,14 +360,6 @@ class Stsc(FullBox):
 
 class Stss(FullBox):
     """
-    aligned(8) class SyncSampleBox
-        extends FullBox(‘stss’, version = 0, 0) {
-        unsigned int(32) entry_count;
-        int i;
-        for (i=0; i < entry_count; i++) {
-            unsigned int(32) sample_number;
-        }
-    }
     """
     def __init__(self, f):
         super(Stss, self).__init__(f)
@@ -384,15 +375,6 @@ class Stss(FullBox):
 
 class Stsz(FullBox):
     """
-    aligned(8) class SampleSizeBox extends FullBox(‘stsz’, version = 0, 0) {
-        unsigned int(32) sample_size;
-        unsigned int(32) sample_count;
-        if (sample_size==0) {
-            for (i=1; i <= sample_count; i++) {
-                unsigned int(32) entry_size;
-            }
-        }
-    }
     """
     def __init__(self, f):
         super(Stsz, self).__init__(f)
@@ -426,32 +408,6 @@ class Stsz(FullBox):
 
 class Tkhd(FullBox):
     """
-    aligned(8) class TrackHeaderBox
-        extends FullBox(‘tkhd’, version, flags){
-        if (version==1) {
-            unsigned int(64) creation_time;
-            unsigned int(64) modification_time;
-            unsigned int(32) track_ID;
-            const unsigned int(32) reserved = 0;
-            unsigned int(64) duration;
-        } else { // version==0
-            unsigned int(32) creation_time;
-            unsigned int(32) modification_time;
-            unsigned int(32) track_ID;
-            const unsigned int(32) reserved = 0;
-            unsigned int(32) duration;
-        }
-        const unsigned int(32)[2] reserved = 0;
-        template int(16) layer = 0;
-        template int(16) alternate_group = 0;
-        template int(16) volume = {if track_is_audio 0x0100 else 0};
-        const unsigned int(16) reserved = 0;
-        template int(32)[9] matrix=
-            { 0x00010000,0,0,0,0x00010000,0,0,0,0x40000000 };
-            // unity matrix
-        unsigned int(32) width;
-        unsigned int(32) height;
-    }
     """
     def __init__(self, f):
         super(Tkhd, self).__init__(f)
@@ -511,15 +467,35 @@ class Trak(ContainerBox):
         super(Trak, self).__init__(f)
 
 
+class Vmhd(FullBox):
+    """
+    """
+    def __init__(self, f):
+        super(Vmhd, self).__init__(f)
+
+        self.graphicsmode = read_value(f, 16)
+        self._bytecount += 2
+
+        self.opcolor = []
+        for idx in xrange(3):
+            self.opcolor.append(read_value(f, 16))
+            self._bytecount += 2
+
+
 BoxDict = {}
 BoxDict['co64'] = Co64
+BoxDict['edts'] = Edts
+BoxDict['elst'] = Elst
 BoxDict['free'] = Free
 BoxDict['ftyp'] = Ftyp
 BoxDict['hdlr'] = Hdlr
+BoxDict['hmhd'] = Hmhd
 BoxDict['mdia'] = Mdia
 BoxDict['minf'] = Minf
 BoxDict['moov'] = Moov
 BoxDict['mvhd'] = Mvhd
+BoxDict['nmhd'] = Nmhd
+BoxDict['smhd'] = Smhd
 BoxDict['stbl'] = Stbl
 BoxDict['stco'] = Stco
 BoxDict['stsc'] = Stsc
@@ -527,3 +503,4 @@ BoxDict['stss'] = Stss
 BoxDict['stsz'] = Stsz
 BoxDict['trak'] = Trak
 BoxDict['tkhd'] = Tkhd
+BoxDict['vmhd'] = Vmhd
